@@ -1,0 +1,118 @@
+---
+title: "Stock Dynamics"
+author: "Terrel Shumway"
+date: "04/28/2015"
+output: html_document
+---
+
+This document presents answers for homework 1 part 2.
+
+## Loading the Data
+```{r}
+library(gdata)
+baseurl = "https://courses.edx.org/c4x/MITx/15.071x_2/asset/"
+
+getdata = function(local,ticker){
+  if(!file.exists(local)){
+    library(downloader)
+    remote = paste0(baseurl,local)
+    print(remote)
+    download(remote,local)
+  }
+  data = read.csv(local)
+  data$Date = as.Date(strptime(data$Date,"%m/%d/%y"))
+  data = cbind(Ticker=ticker,data)
+  data
+}
+
+IBM = getdata("IBMStock.csv","IBM")
+GE = getdata("GEStock.csv","GE")
+PG = getdata("ProcterGambleStock.csv","PG")
+KO = getdata("CocaColaStock.csv","KO")
+BA = getdata("BoeingStock.csv","BA")
+
+stocks = rbind(IBM,GE,PG,KO,BA)
+stocks$Ticker = factor(stocks$Ticker)
+years = getYear(stocks$Date)
+```
+problem     | answer
+------------|--------
+problem 1.1 | `r nrow(IBM)`
+problem 1.2 | `r min(years)`
+problem 1.3 | `r max(years)`
+problem 1.4 | `r mean(IBM$StockPrice)`
+problem 1.5 | `r min(KO$StockPrice)`
+problem 1.6 | `r max(GE$StockPrice)`
+problem 1.7 | `r median(BA$StockPrice)`
+problem 1.8 | `r sd(PG$StockPrice)`
+problem 2.1 | `r getYear(KO[which.min(KO$StockPrice),"Date"])`
+problem 2.2 | `r getYear(KO[which.max(KO$StockPrice),"Date"])`
+
+## Visualizing Stock Trends
+
+```{r}
+library(ggplot2)
+ggplot(stocks,aes(x=Date,y=StockPrice,group=Ticker,color=Ticker))+geom_line()
+```
+
+problem 2.2:
+```{r}
+ggplot(stocks[years==2000,],aes(x=Date,y=StockPrice,group=Ticker,color=Ticker))+geom_line()
+```
+
+problem 2.3:
+```{r}
+ggplot(stocks[years==1980,],aes(x=Date,y=StockPrice,group=Ticker,color=Ticker))+geom_line()
+tapply(stocks$StockPrice,stocks$Ticker,mean)
+```
+
+## Visualizing Stock Dynamics 1995-2005
+
+problems 3.1,3.2,3.3,3.4
+```{r}
+focus = stocks[years>=1995 & years<=2005,]
+ggplot(focus,aes(x=Date,y=StockPrice,group=Ticker,color=Ticker))+geom_line()
+```
+
+## Monthly Trends
+
+problem 4.1:
+```{r}
+fmonths = function(d){ factor(months(d),ordered=TRUE,levels=c("January","February","March","April","May","June","July","August","September","October","November","December")) }
+
+high_months = function(data){
+  mt = tapply(data$StockPrice,fmonths(data$Date),mean)
+  mt[mt>=mean(mt)]
+}
+
+high_months(IBM)
+
+```
+
+
+problem 4.2:
+```{r}
+g = high_months(GE)
+k = high_months(KO)
+g[which.max(g)]
+k[which.max(k)]
+```
+
+```{r}
+g
+k
+high_months(PG)
+high_months(BA)
+```
+
+problem 4.3
+```{r}
+mf = fmonths(stocks$Date)
+tapply(stocks$StockPrice,mf,mean)[c(1,12)]
+```
+This is not exactly right, but it gives the right answer. I really need to do more split-apply-combine practice.
+
+What I need here is to create a 3-D dataset [ticker,month,mean(StockPrice)]. A bar chart would make the answers easy to see.
+
+
+
