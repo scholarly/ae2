@@ -1,0 +1,175 @@
+---
+title: "Demographics and Employment"
+author: "Terrel Shumway"
+date: "04/28/2015"
+output: html_document
+---
+
+This document presents answers for homework 1 part 3.
+
+## Loading the Data
+```{r}
+library(gdata)
+baseurl = "https://courses.edx.org/c4x/MITx/15.071x_2/asset/"
+
+getdata = function(local){
+  if(!file.exists(local)){
+    library(downloader)
+    remote = paste0(baseurl,local)
+    #print(remote)
+    download(remote,local)
+  }
+  data = read.csv(local)
+  data
+}
+
+data = getdata("CPSData.csv")
+
+t = tail(sort(table(data$Industry)),1)
+u = sort(table(data$State))
+minmax = c(1,length(u))
+v = table(data[data$Hispanic==1,]$Race)
+
+
+```
+problem     | answer
+------------|--------
+problem 1.1 | `r nrow(data)`
+problem 1.2 | `r t`
+problem 1.3 | `r u[minmax]`
+problem 1.4 | `r mean(data$Citizenship!="Non-Citizen")`
+problem 1.5 | `r v[v>=250]`
+
+## Evaluating Missing Values
+problem 2.1:
+```{r}
+summary(data)
+```
+
+problem 2.2:
+```{r}
+others = c("Region","Sex","Age","Citizenship")
+sapply(others,function(x){ table(data[,x],is.na(data$Married))})
+```
+Age: people under 14 are not usually married.
+
+problem 2.3:
+```{r}
+t = table(data$State,is.na(data$MetroAreaCode))
+t = t[t[,1]*t[,2]==0,]
+t[order(t[,1],t[,2]),]
+lonestars = sum(t[,1]==0)
+citified = sum(t[,2]==0)
+```
+lonestars: `r lonestars`,
+citified: `r citified`
+
+problem 2.4:
+```{r}
+t = table(data$Region,is.na(data$MetroAreaCode))
+sort(t[,2]/(t[,1]+t[,2]),decreasing=TRUE)
+```
+
+```{r}
+t = sort(tapply(is.na(data$MetroAreaCode),data$State,mean))
+n30 = which.min(abs(t-.30))
+lb2 = length(t)-lonestars
+```
+
+problem 2.5: 
+
+question        | state             | value
+----------------|-------------------|---------
+nearest 30%     | `r names(t)[n30]` | `r t[n30]`
+least with some | `r names(t)[lb2]` | `r t[lb2]`
+
+
+## Integrating Metropolitan Area Data
+
+problem 3.1
+```{r}
+mac = getdata("MetroAreaCodes.csv")
+nrow(mac)
+cc = getdata("CountryCodes.csv")
+nrow(cc)
+```
+
+problem 3.2
+```{r}
+old = colnames(data)
+data = merge(data,mac,by.x="MetroAreaCode",by.y="Code",all.x=TRUE)
+nn = setdiff(colnames(data),old)
+nn
+sum(is.na(data[,nn]))
+```
+
+problem 3.3:
+```{r}
+t = as.data.frame(sort(table(data$MetroArea),decreasing=TRUE))
+knitr::kable(head(t,nrow(t)*.1))
+```
+
+problem 3.4:
+```{r}
+t = sort(tapply(data$Hispanic,data$MetroArea,mean),decreasing=TRUE)
+t[1]
+```
+
+problem 3.5:
+```{r}
+t = as.data.frame(sort(tapply(data$Race=="Asian",data$MetroArea,mean),decreasing=TRUE))
+rownames(t)[t>=.2]
+```
+
+problem 3.6:
+```{r}
+t = tapply(data$Education == "No high school diploma",data$MetroArea, mean, na.rm=TRUE)
+sort(t,na.last=TRUE)[1]
+```
+
+## Integrating Country of Birth Data
+
+problem 4.1:
+```{r}
+old = colnames(data)
+data = merge(data,cc,by.x="CountryOfBirthCode",by.y="Code",all.x=TRUE)
+nn = setdiff(colnames(data),old)
+nn
+sum(is.na(data[,nn]))
+```
+
+problem 4.2:
+```{r}
+sort(table(data$Country),decreasing=TRUE)[1:10]
+```
+
+problem 4.3:
+```{r}
+t = tapply(data$Country != "United States",data$MetroArea, mean, na.rm=TRUE)
+t["New York-Northern New Jersey-Long Island, NY-NJ-PA"]
+
+```
+
+problem 4.4:
+```{r}
+t = tapply(data$Country == "India",data$MetroArea, sum, na.rm=TRUE)
+t[which.max(t)]
+
+t = tapply(data$Country == "Brazil",data$MetroArea, sum, na.rm=TRUE)
+t[which.max(t)]
+
+t = tapply(data$Country == "Somalia",data$MetroArea, sum, na.rm=TRUE)
+t[which.max(t)]
+
+```
+
+Another Way to Skin the Cat:
+```{r,results='asis'}
+gaijin = data[data$Country!="United States",]
+t = as.data.frame(table(gaijin$Country,gaijin$MetroArea))
+colnames(t) = c("Country","MetroArea","Count")
+t = t[t$Count>quantile(t$Count,probs=c(0.01,0.99))[2],] # get rid of the tails: I am certain there is a better way to do this.
+t = t[order(t$Country,-t$Count),]
+knitr::kable((t[t$Country %in% c("India","Brazil","Somalia"),]))
+```
+
