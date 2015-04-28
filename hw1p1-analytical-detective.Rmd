@@ -1,0 +1,140 @@
+---
+title: "An Analytical Detective"
+author: "Terrel Shumway"
+date: "04/28/2015"
+output: html_document
+---
+
+This document presents answers for homework 1 part 1.
+
+## Loading the Data
+```{r}
+baseurl = "https://courses.edx.org/c4x/MITx/15.071x_2/asset/"
+
+getdata = function(local){
+  if(!file.exists(local)){
+    library(downloader)
+    remote = paste0(baseurl,local)
+    print(remote)
+    download(remote,local)
+  }
+  read.csv(local)
+}
+
+data = getdata("mvtWeek1.csv")
+```
+problem     | answer
+------------|--------
+problem 1.1 | `r nrow(data)`
+problem 1.2 | `r ncol(data)`
+problem 1.3 | `r max(data[,"ID"])`
+problem 1.4 | `r min(data[,"Beat"])`
+problem 1.5 | `r sum(data[,"Arrest"])`
+problem 1.6 | `r sum(data$Location=="ALLEY")`
+
+## Understanding Dates in R
+
+problem 2.1
+```{r}
+set.seed(42)
+spl = sample.int(nrow(data),30)
+data[spl,"Date"]
+```
+
+This is actually ambiguous because all of the dates are in the years 2001-2012, so the year *could* also be the first part, but `%y/%d/%m` doesn't happen in practice, so we will go with `%m/%d/%y`.
+
+
+```{r}
+datetimes = strptime(data$Date,"%m/%d/%y %H:%M")
+dates = as.Date(datetimes)
+dates[spl]
+```
+
+problem 2.2: `r strftime(median(dates),"%b %Y")`
+
+
+```{r}
+library(gdata)
+data$Year = getYear(dates)
+data$Month = months(dates)
+data$Weekday = weekdays(dates)
+data$Date = dates
+```
+
+problem 2.3:
+```{r}
+sort(table(data$Weekday))
+```
+
+problem 2.4:
+```{r}
+sort(table(data$Month))
+```
+
+problem 2.5:
+```{r}
+sort(table(data[data$Arrest,"Month"]))
+```
+
+## Visualizing Crime Trends
+
+problem 3.1:
+```{r}
+hist(data$Date,breaks=100)
+```
+
+problem 3.2:
+```{r}
+boxplot(data$Date~data$Arrest)
+```
+TODO: study `boxplot`
+
+problem 3.3,3.4,3.5:
+```{r}
+t = table(data$Year,data$Arrest)
+t = cbind(t,ArrestRate = apply(t,1,function(x){x[2]/sum(x)}))
+t
+```
+
+
+## Popular Locations
+problem 4.1:
+```{r}
+u = table(data$LocationDescription)
+un = setdiff(names(sort(u,decreasing=TRUE)[1:6]),"OTHER")
+un
+```
+
+```{r}
+top5 = data[data$LocationDescription %in% un,]
+```
+problem 4.2: `r nrow(top5)`
+
+```{r}
+top5$LocationDescription = factor(top5$LocationDescription)
+```
+
+
+```{r}
+t5 = table(top5$LocationDescription,top5$Arrest)
+t5 = cbind(t5,ArrestRate = apply(t5,1,function(x){x[2]/sum(x)}))
+oo = order(t5[,3],decreasing=TRUE)
+on = rownames(t5)
+t5 = cbind(on[oo],t5[oo,3])
+t5
+highest_arrest =t5[1,1]
+```
+problem 4.3: `r highest_arrest`
+
+problem 4.4:
+```{r}
+gs = data[data$LocationDescription==highest_arrest,]
+tail(sort(table(gs$Weekday)),1)
+```
+
+problem 4.5:
+```{r}
+dw = data[data$LocationDescription=="DRIVEWAY - RESIDENTIAL",]
+head(sort(table(dw$Weekday)),1)
+```
+
