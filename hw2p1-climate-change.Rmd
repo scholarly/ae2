@@ -1,0 +1,86 @@
+---
+title: "Climate Change"
+author: "Terrel Shumway"
+date: "04/29/2015"
+output: html_document
+---
+
+This document presents answers for homework 2 part 1.
+
+## Creating Our First Model
+```{r}
+baseurl = "https://courses.edx.org/c4x/MITx/15.071x_2/asset/"
+
+getdata = function(local){
+  if(!file.exists(local)){
+    library(downloader)
+    remote = paste0(baseurl,local)
+    print(remote)
+    download(remote,local)
+  }
+  read.csv(local)
+}
+
+data = getdata("climate_change.csv")
+
+spl = data$Year <= 2006
+train=data[spl,]
+test=data[!spl,]
+```
+
+problem 1.1,1.2:
+```{r}
+m1.formula = Temp ~ MEI+CO2+CH4+N2O+CFC.11+CFC.12+TSI+Aerosols
+m1 = lm(m1.formula,data=train)
+summary(m1)
+```
+
+## Understanding the Model
+
+problem 2.2:
+```{r}
+indvars = setdiff(colnames(train),c("Year","Month","Temp"))
+cort = cor(train[,indvars])
+
+sigcor = function(var,cort){
+  r = cort[var,]
+  s = r[abs(r)>=.7]
+  sort(s,decreasing=TRUE)[2:length(s)]
+}
+
+sapply(c("N2O","CFC.11"),sigcor,cort)
+```
+
+## Simplifying the Model
+problem 3:
+```{r}
+m2.formula = Temp ~ MEI+N2O+TSI+Aerosols
+m2 = lm(m2.formula,data=train)
+summary(m2)
+```
+
+## Automatically Building the Model
+```{r,results='hide'}
+m3 = step(m1)
+```
+
+problem 4:
+```{r}
+setdiff(colnames(m1$model),colnames(m3$model))
+```
+
+## Testing on Unseen Data
+```{r}
+compute.R2 = function(baseline,predicted,actual){
+  1 - sum((predicted-actual)^2)/sum((baseline-actual)^2)
+}
+baseline = mean(train$Temp)
+```
+
+problem 5:
+```{r}
+compute.R2(baseline,predict(m3,newdata=test),test$Temp)
+compute.R2(baseline,predict(m2,newdata=test),test$Temp)
+compute.R2(baseline,predict(m1,newdata=test),test$Temp)
+```
+
