@@ -117,17 +117,30 @@ ggplot(limited,aes(x=Age,y=Info.On.Internet)) + geom_point(position = position_j
 ```
 
 
-This heat map would be more interesting if `Info.On.Internet` were a set of factors, e.g. `Name.On.Internet`,`DOB.On.Internet` ...
+problem 4.4:
+
+This heat map would be more interesting if `Info.On.Internet` were a set of belief indicators, e.g. `Name.On.Internet`,`DOB.On.Internet`, etc. instead of a count.
 
 ```{r}
 binyears = 10
 hm = as.data.frame(as.matrix(table(as.integer(limited$Age/binyears),limited$Info.On.Internet)))
 
 
-levels(hm$Var1)=levels=paste(tt<-seq(0,90,binyears),tt+binyears,sep="-")
+levels(hm$Var1)=paste(tt<-seq(10,100,binyears),tt+binyears,sep="-")
 
 ggplot(hm, aes(x=Var1,y=Var2)) + geom_tile(aes(fill=Freq)) +  
   scale_fill_gradient(low="white",high="blue") +
   labs(y="Info on Internet",x="Age Group",fill="Count")
 
+```
+
+problem 4.5:
+```{r}
+tapply(limited$Info.On.Internet,limited$Smartphone,mean)
+```
+
+
+problem 4.6:
+```{r}
+tapply(limited$Tried.Masking.Identity,limited$Smartphone,mean,na.rm=TRUE)
 ```
