@@ -1,0 +1,116 @@
+---
+title: "Reading Test Scores"
+author: "Terrel Shumway"
+date: "04/29/2015"
+output: html_document
+---
+
+This document presents answers for homework 2 part 2.
+
+## Getting and Cleaning the Data
+```{r}
+baseurl = "https://courses.edx.org/c4x/MITx/15.071x_2/asset/"
+
+getdata = function(local){
+  if(!file.exists(local)){
+    library(downloader)
+    remote = paste0(baseurl,local)
+    print(remote)
+    download(remote,local)
+  }
+  read.csv(local)
+}
+
+train = getdata("pisa2009train.csv")
+test = getdata("pisa2009test.csv")
+```
+
+problem 1.1:
+```{r}
+nrow(train)
+```
+
+problem 1.2:
+```{r}
+tapply(train$readingScore,train$male,mean)
+```
+
+problem 1.3: This may not be elegant, but it works better than manually searching through the untidy summary output
+```{r}
+s = summary(train)
+colnames(s)[!is.na(s[7,])] # at least 1 NA
+colnames(s)[is.na(s[7,])] # no NA's
+```
+
+problem 1.3: This, however, *is* elegant.
+```{r}
+sapply(train,function(x){sum(is.na(x))})
+```
+
+problem 1.4:
+```{r}
+train = na.omit(train)
+test = na.omit(test)
+nrow(train)
+nrow(test)
+```
+
+problem 3.1:
+```{r}
+library(plyr)
+l_ply(list(train,test),function(d){
+  d$raceeth = relevel(d$raceeth,"White")
+})
+
+m1.form = readingScore ~ .
+m1 = lm(m1.form,data=train)
+```
+
+problem 3.2: `r sqrt(mean(m1$residuals^2))`
+
+problem 3.3: `r (11-9)*m1$coefficients[["grade"]]`
+
+problem 3.5:
+```{r}
+sc = summary(m1)$coefficients
+rownames(sc)[sc[,4]>.05]
+```
+
+## Predicting on Unseen Data
+```{r}
+m1.pred = predict(m1,newdata=test)
+r = range(m1.pred,na.rm=T)
+```
+
+problem 4.1: `r r[2]-r[1]`
+
+```{r}
+m1.resid = m1.pred - test$readingScore
+sse = sum((m1.resid)^2)
+rmse = sqrt(mean(m1.resid^2))
+```
+problem 4.2: 
+
+ * sse = `r sse` 
+ * rmse = `r rmse`
+
+```{r}
+baseline = mean(train$readingScore)
+sst = sum((test$readingScore - baseline)^2)
+```
+problem 4.3:
+
+ * baseline=`r baseline` 
+ * sst=`r sst`
+
+problem 4.4: 
+
+ * R-squared = `r 1-sse/sst`
+
+## Bonus
+
+```{r}
+m2 = step(m1)
+sqrt(mean((predict(m2,newdata=test)-test$readingScore)^2))
+```
+
