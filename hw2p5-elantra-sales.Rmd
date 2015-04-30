@@ -1,0 +1,116 @@
+---
+title: "Predicting Elantra Sales"
+author: "Terrel Shumway"
+date: "04/30/2015"
+output: html_document
+---
+
+This document presents answers for homework 2 part 5.
+
+## Getting and Cleaning the Data
+```{r}
+baseurl = "https://courses.edx.org/c4x/MITx/15.071x_2/asset/"
+
+getdata = function(local){
+  if(!file.exists(local)){
+    library(downloader)
+    remote = paste0(baseurl,local)
+    print(remote)
+    download(remote,local)
+  }
+  read.csv(local)
+}
+
+data = getdata("elantra.csv")
+
+```
+
+## Split for Training and Testing 
+problem 1
+```{r}
+spl = data$Year<2013
+train=subset(data,spl)
+test=subset(data,!spl)
+nrow(train)
+```
+
+## Build a model
+problem 2.1,2.2:
+```{r}
+m1 = lm(
+  ElantraSales ~ Unemployment + CPI_all + CPI_energy + Queries
+  ,data=train)
+s = summary(m1)
+s$r.squared
+```
+
+problem 2.2:
+```{r}
+sum(s$coefficients[,4]<.05)
+```
+
+problem 2.3:
+```{r}
+s$coefficients["Unemployment",]
+```
+
+## Modeling Seasonality
+
+problem 3.1:
+```{r}
+m2 = lm(
+  ElantraSales ~ Month + Unemployment + CPI_all + CPI_energy + Queries
+  ,data=train)
+s = summary(m2)
+s$r.squared
+s$coefficients
+```
+
+problem 3.3:
+```{r}
+cm = s$coefficients[["Month","Estimate"]]
+cm*(3-1)
+cm*(5-1)
+```
+
+problem 4.1:
+```{r}
+train$mf = as.factor(train$Month)
+test$mf = as.factor(test$Month)
+
+m3 = lm(
+  ElantraSales ~ mf + Unemployment + CPI_all + CPI_energy + Queries
+  ,data=train)
+s = summary(m3)
+s$r.squared
+```
+
+problem 4.2:
+```{r}
+s$coefficients[s$coefficients[,4]<.1,]
+```
+
+## Correlations
+problem 5.1:
+```{r}
+cort = cor(train[,c("Month","CPI_all","CPI_energy","Queries")])
+e = cort["CPI_energy",]
+e[abs(e)>0.6]
+```
+
+problem 5.2:
+```{r}
+q = cort["Queries",]
+q[abs(q)>0.6]
+```
+
+## A Reduced Model
+
+problem 6.1:
+```{r}
+m4 = step(m3)
+setdiff(attr(m3$terms,"term.labels"),attr(m4$terms,"term.labels"))
+```
+
+## Test Predictions
+
