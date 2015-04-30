@@ -1,0 +1,118 @@
+---
+title: "Detecting Flu Epidemics"
+author: "Terrel Shumway"
+date: "04/29/2015"
+output: html_document
+---
+
+This document presents answers for homework 2 part 3.
+
+## Getting and Cleaning the Data
+```{r}
+baseurl = "https://courses.edx.org/c4x/MITx/15.071x_2/asset/"
+
+getdata = function(local){
+  if(!file.exists(local)){
+    library(downloader)
+    remote = paste0(baseurl,local)
+    print(remote)
+    download(remote,local)
+  }
+  read.csv(local)
+}
+
+train = getdata("FluTrain.csv")
+
+```
+
+problem 1.1:
+```{r}
+train[which.max(train$ILI),]
+train[which.max(train$Queries),]
+```
+
+problem 1.2:
+```{r}
+library(ggplot2)
+ggplot(train,aes(x=ILI))+geom_histogram(binwidth=1)
+```
+
+problem 1.3:
+```{r}
+
+ggplot(train,aes(x=ILI,y=Queries))+geom_point()+geom_smooth(method="lm")
+ggplot(train,aes(x=log(ILI),y=Queries))+geom_point()+geom_smooth(method="lm")
+m1.cor = cor(log(train$ILI),train$Queries)
+
+```
+
+problem 2.1,2.2:
+```{r}
+m1 = lm(log(ILI)~Queries,train)
+s = summary(m1)
+
+m1.cor^2
+s$r.squared
+```
+
+## Performance on the Test Set
+
+
+```{r}
+test = getdata("FluTest.csv")
+m1.pred = predict(m1,newdata=test)
+target = which(test$Week=="2012-03-11 - 2012-03-17")
+est = exp(m1.pred[target])
+obs = test[target,"ILI"]
+```
+problem 3.1: `r est`
+
+problem 3.2: `r (obs-est)/obs`
+
+```{r}
+rmse = sqrt(mean((exp(m1.pred)-test$ILI)^2))
+```
+problem 3.3: `r rmse`
+
+## Training a Time Series Model
+problem 4.1
+```{r}
+library(zoo)
+lag2 = lag(zoo(train$ILI),-2,na.pad=TRUE)
+train$ILILag2 = coredata(lag2)
+sum(is.na(train$ILILag2))
+```
+
+problem 4.2
+```{r}
+ggplot(train,aes(x=log(ILI),y=log(ILILag2))) + geom_point() + geom_smooth(method="lm")
+```
+
+problem 4.3
+```{r}
+m2 = lm(log(ILI)~Queries+log(ILILag2),data=train)
+s = summary(m2)
+sig = s$coefficients[,4]<.05
+s$coefficients[sig,]
+s$r.squared
+```
+
+
+## Performance on the Test Set
+problem 5.1,5.2,5.3:
+```{r}
+lag2 = lag(zoo(test$ILI),-2,na.pad=TRUE)
+test$ILILag2 = coredata(lag2)
+sum(is.na(test$ILILag2))
+ilast = nrow(train)
+test[1:2,"ILILag2"] = train[(ilast-1):ilast,"ILI"]
+sum(is.na(test$ILILag2))
+test[1:2,"ILILag2"]
+```
+
+problem 5.4:
+```{r}
+m2.pred = predict(m2,newdata=test)
+rmse = sqrt(mean((exp(m2.pred)-test$ILI)^2))
+```
+rmse=`r rmse`
