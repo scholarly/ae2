@@ -73,7 +73,7 @@ cm*(3-1)
 cm*(5-1)
 ```
 
-problem 4.1:
+
 ```{r}
 train$mf = as.factor(train$Month)
 test$mf = as.factor(test$Month)
@@ -82,8 +82,8 @@ m3 = lm(
   ElantraSales ~ mf + Unemployment + CPI_all + CPI_energy + Queries
   ,data=train)
 s = summary(m3)
-s$r.squared
 ```
+problem 4.1: $R^2 = `r s$r.squared`$
 
 problem 4.2:
 ```{r}
@@ -113,4 +113,40 @@ setdiff(attr(m3$terms,"term.labels"),attr(m4$terms,"term.labels"))
 ```
 
 ## Test Predictions
+
+
+```{r}
+pred = predict(m4,newdata=test)
+abserr = abs(test$ElantraSales-pred)
+sse = sum(abserr^2)
+```
+problem 6.2: $SSE=`r sse`$
+
+```{r}
+baseline = mean(train$ElantraSales)
+sst = sum((test$ElantraSales-baseline)^2)
+r2 = 1 - sse/sst
+wae = which.max(abserr)
+memy = paste(test[[wae,"Month"]],test[[wae,"Year"]],sep="/")
+```
+
+problem 6.3: $baseline=`r baseline`$
+
+problem 6.4: $R^2 = `r r2`$ 
+
+problem 6.5: `r max(abserr)`
+
+problem 6.6: `r memy`
+
+## Bonus
+```{r}
+library(ggplot2)
+pf = data.frame(my=paste(test$Month,test$Year,sep="/")
+                ,predicted=pred,actual=test$ElantraSales)
+ggplot(pf,aes(x=predicted,y=actual))+geom_point()+geom_abline(intercept=0, slope=1) +geom_text(label=pf$my,size=4)
+
+```
+Interesting: most (`r mean(test$ElantraSales-pred>0)`) of the actual values were higher than predicted (above the line). 
+
+
 
