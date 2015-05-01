@@ -1,0 +1,152 @@
+---
+title: "Predicting Parole Violators"
+author: "Terrel Shumway"
+date: "05/01/2015"
+output: html_document
+---
+
+This document presents answers for homework 3 part 2.
+
+## Getting and Cleaning the Data
+```{r}
+library(data.table)
+
+baseurl = "https://courses.edx.org/c4x/MITx/15.071x_2/asset/"
+
+getdata = function(local){
+  if(!file.exists(local)){
+    library(downloader)
+    remote = paste0(baseurl,local)
+    print(remote)
+    download(remote,local)
+  }
+  read.csv(local)
+}
+
+data = getdata("parole.csv")
+
+data$gender=factor(data$male)
+levels(data$gender)=c("female","male")
+data$male = NULL
+
+data$race = factor(data$race)
+levels(data$race) = c("white","non-white")
+
+data$state = factor(data$state)
+levels(data$state) = c("Other","Kentucky","Louisiana","Virginia")
+
+data$crime = factor(data$crime)
+levels(data$crime) = c("Other","Larceny","Drug","Driving")
+```
+
+## Understanding the Dataset
+problem 1.1: `r nrow(data)`
+problem 1.2: `r sum(data$violator==1)`
+
+## Splitting the Dataset
+```{r}
+library(caTools)
+set.seed(144)
+spl = sample.split(data$violator,SplitRatio=0.7)
+train = subset(data,spl)
+test = subset(data,!spl)
+```
+
+## Building a Model
+problem 4.1: 
+```{r}
+m1 = glm(violator~.,data=train,family="binomial")
+s=summary(m1)
+s$coefficients[s$coefficients[,4]<.05,]
+```
+
+
+
+```{r}
+logodds = sum(s$coefficients[,1]*c(1 # intercept
+                 ,0 # white
+                 ,50 # age
+                 ,0 # not KY
+                 ,0 # not LA
+                 ,0 # not VA
+                 ,3 # time served
+                 ,12 # max time 
+                 ,0 # not multiple
+                 ,1 # larceny
+                 ,0 # not drug
+                 ,0 # not driving
+                 ,1 # male
+                 ))
+```
+
+problem 4.2:
+
+$odds = `r exp(logodds)`$
+
+$P(violator) = `r 1/(1+exp(-logodds))`$
+
+## Evaluating the Model on Testing Data
+
+```{r}
+library(ROCR)
+pred = prediction(predict(m1,type="response"),train$violator)
+perf = performance(pred,"tnr","fnr")
+plot(perf,colorize=T,print.cutoffs.at=seq(0.2,.6,0.1),text.adj=c(-.3,1.7))
+
+p1 = predict(m1,newdata=test,type="response")
+pred = prediction(p1,test$violator)
+perf = performance(pred,"tnr","fnr")
+plot(perf,colorize=T,print.cutoffs.at=seq(0.2,.6,0.1),text.adj=c(-.3,1.7))
+```
+problem 5.1: `r max(p1)`
+
+
+problem 5.2:
+```{r}
+conf = table(test$violator,p1>0.5)
+```
+
+  sensitivity = `r 
+  conf[2,2]/sum(conf[2,])
+  `
+  
+  specificity = `r 
+  conf[1,1]/sum(conf[1,])
+  `
+  
+  accuracy = `r 
+  sum(diag(conf))/length(p1)
+  `
+  
+```{r}
+n = nrow(test)
+bl.pred = rep(mean(train$violator)>=.5,n)
+bl.conf = table(test$violator,bl.pred)
+bl.acc = bl.conf[1]/n
+```
+problem 5.3: `r bl.acc`
+
+
+problem 5.4,5.5:
+```{r}
+conf = table(test$violator,p1>0.2)
+conf
+```
+
+  sensitivity = `r 
+  conf[2,2]/sum(conf[2,])
+  `
+  
+  specificity = `r 
+  conf[1,1]/sum(conf[1,])
+  `
+  
+  accuracy = `r 
+  sum(diag(conf))/length(p1)
+  `
+
+problem 5.6:
+```{r}
+as.numeric(performance(pred,"auc")@y.values)
+```
+
