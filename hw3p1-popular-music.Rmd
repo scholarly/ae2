@@ -1,0 +1,142 @@
+---
+title: "Popularity of Music Records"
+author: "Terrel Shumway"
+date: "05/01/2015"
+output: html_document
+---
+
+This document presents answers for homework 3 part 1.
+
+## Getting and Cleaning the Data
+```{r}
+library(data.table)
+
+baseurl = "https://courses.edx.org/c4x/MITx/15.071x_2/asset/"
+
+getdata = function(local){
+  if(!file.exists(local)){
+    library(downloader)
+    remote = paste0(baseurl,local)
+    print(remote)
+    download(remote,local)
+  }
+  as.data.table(read.csv(local))
+}
+
+data = getdata("songs.csv")
+setkey(data,year,artistname,songtitle)
+```
+
+## Understanding the Dataset
+problem 1.1: `r sum(data$year==2010)`
+
+```{r}
+mj = data[artistname=="Michael Jackson"]
+```
+problem 1.2: `r nrow(mj)`
+
+problem 1.3:
+```{r}
+knitr::kable(mj[Top10==1,songtitle])
+```
+
+
+
+problem 1.4:
+```{r}
+library(plyr)
+ts = count(data,"timesignature")
+knitr::kable(ts)
+ts[[which.max(ts$freq),"timesignature"]]
+```
+
+problem 1.5:
+```{r}
+knitr::kable(data[which.max(tempo),.(songtitle,year,artistname)])
+```
+
+## Creating a Prediction Model
+```{r}
+spl = data$year<=2009
+idvars = c("year","songID","artistID","songtitle","artistname")
+measurevars = setdiff(colnames(data),idvars)
+train = data[spl,measurevars,with=FALSE]
+test = data[!spl,measurevars,with=FALSE]
+```
+problem 2.1: `r nrow(train)`
+
+problem 2.2,2.3,2.4,2.5:
+```{r}
+m1 = glm(Top10~.,data=train,family="binomial")
+summary(m1)
+```
+
+## Beware of Multicolinearity
+problem 3.1: `r cor(train$loudness,train$energy)`
+
+problem 3.2:
+```{r}
+m2 = glm(Top10~.-loudness,data=train,family="binomial")
+summary(m2)$coefficients["energy",]
+```
+
+problem 3.3:
+```{r}
+m3 = glm(Top10~.-energy,data=train,family="binomial")
+summary(m3)$coefficients["loudness",]
+```
+
+## Validating Our Model
+```{r}
+n = nrow(test)
+m3.pred = predicted=predict(m3,newdata=test,type="response")
+m3.conf = table(test$Top10,m3.pred>=0.45)
+m3.acc = sum(diag(m3.conf))/n
+```
+problem 4.1: `r m3.acc`
+```{r}
+bl.pred = rep(mean(train$Top10)>=.5,n)
+bl.conf = table(test$Top10,bl.pred)
+bl.acc = bl.conf[1]/nrow(test)
+```
+problem 4.2: `r bl.acc`
+
+problem 4.3:
+
+  true positives = `r 
+  m3.conf[2,2]
+  `
+  
+  false positives = `r 
+  m3.conf[1,2]
+  `
+
+problem 4.4:
+
+  sensitivity = `r 
+  m3.conf[2,2]/sum(m3.conf[2,])
+  `
+  
+  specificity = `r 
+  m3.conf[1,1]/sum(m3.conf[1,])
+  `
+
+## Bonus
+```{r,results='hide'}
+library(ROCR)
+```
+
+### Training Set
+```{r}
+pred = prediction(predict(m3,type="response"),train$Top10)
+perf = performance(pred,"tpr","fpr")
+plot(perf,colorize=T,print.cutoffs.at=seq(0.3,.5,0.05),text.adj=c(-.3,1.7))
+```
+
+### Testing Set
+```{r}
+pred = prediction(m3.pred,test$Top10)
+perf = performance(pred,"tpr","fpr")
+plot(perf,colorize=T,print.cutoffs.at=seq(0.3,.5,0.05),text.adj=c(-.3,1.7))
+```
+
