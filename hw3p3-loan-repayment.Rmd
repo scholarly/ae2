@@ -1,0 +1,155 @@
+---
+title: "Predicting Loan Repayment"
+author: "Terrel Shumway"
+date: "05/01/2015"
+output: html_document
+---
+
+This document presents answers for homework 3 part 3.
+
+## Getting and Cleaning the Data
+```{r}
+library(data.table)
+
+baseurl = "https://courses.edx.org/c4x/MITx/15.071x_2/asset/"
+
+getdata = function(local){
+  if(!file.exists(local)){
+    library(downloader)
+    remote = paste0(baseurl,local)
+    print(remote)
+    download(remote,local)
+  }
+  read.csv(local)
+}
+
+data = getdata("loans.csv")
+
+```
+
+## Preparing the Dataset
+problem 1.1: `r mean(data$not.fully.paid)`
+
+problem 1.2: 
+```{r}
+sapply(data,function(x){sum(is.na(x))})
+```
+
+
+```{r}
+# storage = "imputed.Rdata.xz"
+# if(file.exists(storage)){
+#   load(storage)
+# }else{
+#   library(mice)
+#   set.seed(144)
+#   measure.vars = setdiff(colnames(data),"not.fully.paid")
+#   data[measure.vars]=complete(mice(data[measure.vars]))
+#   save(data,file=storage,compress="xz")
+# }
+data = getdata("loans_imputed.csv")
+```
+
+## Splitting the Dataset
+```{r}
+library(caTools)
+set.seed(144)
+spl = sample.split(data$not.fully.paid,SplitRatio=0.7)
+train = subset(data,spl)
+test = subset(data,!spl)
+```
+
+## Building a Model
+problem 2.1: 
+```{r}
+m1 = glm(not.fully.paid~.,data=train,family="binomial")
+s=summary(m1)
+s$coefficients[s$coefficients[,4]<.05,]
+```
+
+problem 2.2:
+```{r}
+logodds = s$coefficients[["fico","Estimate"]]*(700-710)
+logodds
+exp(logodds)
+```
+
+```{r}
+test$predicted.risk = predict(m1,newdata=test,type="response")
+conf = table(test$not.fully.paid,test$predicted.risk>0.5)
+conf
+```
+
+```{r}
+accuracy = sum(diag(conf))/nrow(test)
+sensitivity = conf[2,2]/sum(conf[2,])
+specificity = conf[1,1]/sum(conf[1,])
+```
+
+```{r}
+bl.pred = rep(mean(train$not.fully.paid)>=.5,nrow(test))
+bl.conf = table(test$not.fully.paid,bl.pred)
+bl.acc = bl.conf[1]/nrow(test)
+```
+
+problem 2.3: 
+
+$accuracy = `r accuracy`$
+
+baseline accuracy: $`r bl.acc`$
+
+problem 2.4:
+
+```{r}
+library(ROCR)
+pred = prediction(test$predicted.risk,test$not.fully.paid)
+auc = as.numeric(performance(pred,"auc")@y.values)
+```
+
+$AUC = `r auc`$
+
+## A Smart Baseline
+
+problem 3.2:
+```{r}
+m2 = glm(not.fully.paid ~ int.rate,data=train,family="binomial")
+m2.pt = predict(m2,newdata=test,type="response")
+max(m2.pt)
+```
+
+problem 3.3:
+```{r}
+m2.auc = auc = as.numeric(performance(prediction(m2.pt,test$not.fully.paid),"auc")@y.values)
+m2.auc
+```
+
+## Profitability of an Investment
+Note: A real profitability analysis would include partial payment and cost of collections. The interest rate would be the dependent variable that the model would set. Therefore, this scenario does not seem very realistic to me. Also, continuous compounding makes the math easy, but I have never seen it used in practice even once.
+
+Problem 4.1
+```{r}
+10*exp(0.06*3)
+```
+
+## A Simple Investment Strategy
+```{r}
+test$profit = ifelse(test$not.fully.paid,-1,exp(test$int.rate*3)-1)
+max(test$profit)*10
+```
+
+```{r}
+hiint = subset(test,int.rate>=.15)
+mean(hiint$profit)
+mean(hiint$not.fully.paid)
+```
+
+```{r}
+cutoff = sort(hiint$predicted.risk,decreasing=FALSE)[100]
+basket = subset(hiint,predicted.risk <= cutoff)
+profit = sum(basket$profit)
+profit
+log(profit/3)
+table(basket$not.fully.paid)
+```
+
+
