@@ -1,0 +1,165 @@
+---
+title: "Automating Reviews in Medicine"
+author: "Terrel Shumway"
+date: "04/13/2015"
+output: 
+  html_document:
+    theme: readable
+---
+
+This document presents answers to questions in homework 5 part 2.
+
+# Loading the Data
+
+```{r,echo=FALSE}
+
+remote = "https://courses.edx.org/c4x/MITx/15.071x_2/asset/clinical_trial.csv"
+local = "clinical_trial.csv"
+if(!file.exists(local)){
+  library(downloader)
+  download(remote,local)
+}
+data = read.csv(local,stringsAsFactors=F)
+```
+problem 1.1: `r nrow(data)`
+
+```{r}
+data$l1 = nchar(data$abstract)
+```
+
+problem 1.2: `r sum(data$l1==0)`
+
+```{r}
+data$l2 = nchar(data$title)
+```
+problemt 1.3: `r data[which.min(data$l2),"title"]`
+
+
+# Preparing the Corpus
+
+```{r}
+library(tm)
+library(SnowballC)
+pre.corp = function(text){
+  corpus = Corpus(VectorSource(text))
+  corpus = tm_map(corpus,tolower) 
+  corpus = tm_map(corpus,PlainTextDocument)
+  corpus = tm_map(corpus,removePunctuation) 
+  corpus = tm_map(corpus,removeWords, stopwords("english"))
+  corpus = tm_map(corpus,stemDocument)
+  corpus
+}
+
+corpT = pre.corp(data$title)
+dtmT = as.matrix(removeSparseTerms(DocumentTermMatrix(corpT),0.95))
+
+corpA = pre.corp(data$abstract)
+dtmA = as.matrix(removeSparseTerms(DocumentTermMatrix(corpA),0.95))
+```
+problem 2.1: 
+title words= `r ncol(dtmT)` abstract words= `r ncol(dtmA)`
+
+## Building a Model
+
+```{r}
+mk.df = function(x,prefix){
+  y = as.data.frame(x)
+  colnames(y) = paste0(prefix,colnames(x))
+  rownames(y) = NULL # necessary to suppress spurious warning from cbind
+  y
+}
+
+dtm = data.frame(trial=data$trial)
+dtm = cbind(dtm,mk.df(dtmT,"T"),mk.df(dtmA,"A"))
+
+```
+
+Problem 3.2: `r ncol(dtm)` columns
+
+split into training and testing sets
+
+```{r}
+library(caTools)
+set.seed(144)
+spl = sample.split(dtm$trial,SplitRatio=.7)
+train = dtm[spl,]
+test = dtm[!spl,]
+```
+
+baseline model
+
+```{r}
+baseline = ifelse(mean(train$trial)<.5,0,1)
+bl.c = table(test$trial)
+bl.acc = bl.c[1+baseline]/nrow(test)
+```
+problem 3.3: accuracy of baseline model=`r bl.acc`
+
+Build a CART model
+
+```{r}
+library(rpart)
+library(rpart.plot)
+
+m1 = rpart(trial~.,data=train,method="class")
+```
+
+problem 3.4:
+```{r}
+prp(m1)
+```
+
+```{r}
+m1.pred = predict(m1)
+```
+problem 3.5: `r max(m1.pred[,2])`
+
+
+```{r}
+N = nrow(train)
+m1.pt = predict(m1,type="class")
+m1.ct = table(train$trial,m1.pt)
+m1.acct = (m1.ct[1,1]+m1.ct[2,2])/N
+m1.senst = m1.ct[2,2]/(m1.ct[2,1]+m1.ct[2,2])
+m1.spect = m1.ct[1,1]/(m1.ct[1,1]+m1.ct[1,2])
+```
+
+
+problem 3.7:
+
+var                      |value
+---------------------    |-----
+training set accuracy    |`r m1.acct`
+training set sensitivity |`r m1.senst`
+training set specificity |`r m1.spect`
+
+## Evaluating the Model on the Testing Set
+
+```{r}
+N = nrow(test)
+m1.p = predict(m1,newdata=test,type="class")
+m1.c = table(test$trial,m1.p)
+m1.acc = (m1.c[1,1]+m1.c[2,2])/N
+m1.sens = m1.c[2,2]/(m1.c[2,1]+m1.c[2,2])
+m1.spec = m1.c[1,1]/(m1.c[1,1]+m1.c[1,2])
+```
+
+problem 4.1:
+
+var                      |value
+---------------------    |-----
+testing set accuracy     |`r m1.acc`
+testing set sensitivity  |`r m1.sens`
+testing set specificity  |`r m1.spec`
+
+
+```{r}
+library(ROCR)
+m1.pred = predict(m1,newdata=test)
+m1.roc = prediction(m1.pred[,2],test$trial)
+plot(performance(m1.roc,"tpr","fpr")
+     ,colorize=T,print.cutoffs.at = seq(0,1,0.1),text.adj=c(-0.2,1.7))
+m1.auc = as.numeric(performance(m1.roc,"auc")@y.values)
+```
+problem 4.2: area under curve (auc) = `r m1.auc`
+
