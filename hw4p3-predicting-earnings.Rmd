@@ -1,0 +1,194 @@
+---
+title: "Income Demographics"
+author: "Terrel Shumway"
+date: "04/27/2015"
+output: html_document
+---
+
+This document presents answers for part 3 of homework 4.
+
+```{r}
+library(caTools)
+library(ROCR)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+
+accuracy = function(conf){sum(diag(conf))/sum(conf)}
+
+
+baseurl = "https://courses.edx.org/c4x/MITx/15.071x_2/asset/"
+
+getdata = function(local){
+  if(!file.exists(local)){
+    library(downloader)
+    remote = paste0(baseurl,local)
+    download(remote,local)
+  }
+  data = read.csv(local)#,stringsAsFactors=F)
+  data
+}
+
+data = getdata("census.csv")
+```
+
+## A Logistic Regression Model
+
+
+```{r}
+set.seed(2000)
+spl = sample.split(data$over50k,SplitRatio=.6)
+train=data[spl,]
+test=data[!spl,]
+
+```
+
+Problem 1.1
+```{r}
+storage="over50logreg.Rdata.xz"
+if(file.exists(storage)){
+  load(storage)
+}else{
+  m1 = glm(over50k~.,data=train,family="binomial")  
+  save(m1,file=storage,compress="xz")
+}
+
+summary(m1)
+
+```
+
+Problem 1.2
+
+```{r}
+m1.pred = predict(m1,newdata=test,type="response")
+m1.conf = table(test$over50k,m1.pred>0.5)
+m1.acc = accuracy(m1.conf)
+```
+model1 accuracy = `r m1.acc`
+
+Problem 1.3
+
+```{r}
+base = table(train$over50k)
+m0.outcome = dimnames(base)[[1]][which.max(base)]
+m0.conf = table(test$over50k,rep(m0.outcome,length=nrow(test)))
+m0.acc = accuracy(m0.conf)
+```
+baseline accuracy = `r m0.acc`
+
+Problem 1.4
+```{r}
+m1.auc = as.numeric(performance(prediction(m1.pred,test$over50k),"auc")@y.values)
+```
+area under curve: `r m1.auc`
+
+
+
+## A CART Model
+
+```{r}
+m2 = rpart(over50k~.,data=train,method="class")
+m2.pred = predict(m2,newdata=test)[,2]
+m2.conf = table(test$over50k,m2.pred>0.5)
+m2.acc = accuracy(m2.conf)
+```
+Problem 2.1: number of splits = `r m2$cptable[nrow(m2$cptable),"nsplit"]`
+
+Problems 2.2,2.3
+```{r}
+prp(m2)
+```
+
+Problem 2.4: accuracy = `r m2.acc`
+
+Problem 2.5
+```{r}
+
+m1.roc = prediction(m1.pred,test$over50k)
+plot(performance(m1.roc,"tpr","fpr"),
+     colorize=T,print.cutoffs.at=seq(0,1,0.1),text.adj=c(-.3,1.7))
+
+m2.roc = prediction(m2.pred,test$over50k)
+plot(performance(m2.roc,"tpr","fpr"),
+     colorize=T,print.cutoffs.at=seq(0,1,0.1),text.adj=c(-.3,1.7))
+
+```
+
+Problem 2.6
+```{r}
+m2.auc = as.numeric(performance(prediction(m2.pred,test$over50k),"auc")@y.values)
+```
+area under curve: `r m2.auc`
+
+## A Random Forest Model
+
+
+```{r}
+set.seed(1)
+trainSmall = train[sample(nrow(train), 2000), ]
+
+set.seed(1)
+m3 = randomForest(over50k~.,data=trainSmall)
+
+m3.pred = predict(m3,newdata=test)
+m3.conf = table(test$over50k,m3.pred)
+m3.acc = accuracy(m3.conf)
+```
+Problem 3.1: accuracy = `r m3.acc`
+
+Problem 3.2
+```{r}
+vu = varUsed(m3, count=TRUE)
+vusorted = sort(vu, decreasing = FALSE, index.return = TRUE)
+dotchart(vusorted$x, names(m3$forest$xlevels[vusorted$ix]))
+```
+
+Problem 3.3
+```{r}
+varImpPlot(m3)
+```
+
+## Selecting CP with cross-validation
+
+```{r}
+
+library(caret)
+library(e1071)
+
+storage = "cvmodels.Rdata.xz"
+if(file.exists(storage)){
+  load(storage)
+}else{
+  set.seed(2)
+  numFolds = trainControl(method="cv",number=10)
+  cpGrid = expand.grid(.cp = seq(0.002,0.1,0.002))
+  cvmodels = train(over50k~., 
+        data=train,
+        method="rpart",
+        trControl=numFolds,
+        tuneGrid = cpGrid)
+  save(numFolds,cpGrid,cvmodels,file=storage,compress="xz")
+}
+
+bestcp = cvmodels$bestTune
+```
+Problem 4.1: bestcp = `r bestcp`
+
+```{r}
+m4 =rpart(over50k~.,data=train,method="class",cp=bestcp)  #cvmodels$finalModel
+m4.pred = predict(m4,newdata=test)[,2]
+m4.conf = table(test$over50k,m4.pred>0.5)
+m4.acc = accuracy(m4.conf)
+```
+Problem 4.2: accuracy = `r m4.acc`
+
+Bonus:
+```{r}
+m4.roc = prediction(m4.pred,test$over50k)
+plot(performance(m4.roc,"tpr","fpr"),
+     colorize=T,print.cutoffs.at=seq(0,1,0.1),text.adj=c(-.3,1.7))
+
+```
+
+Problem 4.3: number of splits = `r m4$cptable[nrow(m4$cptable),"nsplit"]`
+
