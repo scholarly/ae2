@@ -42,3 +42,162 @@ problem 1.5: `r max(nchars)`
 problem 1.6: `r which.min(nchars)`
 
 ## Preparing the Corpus
+```{r}
+library(tm)
+library(SnowballC)
+pre.corp = function(text){
+  corpus = Corpus(VectorSource(text))
+  corpus = tm_map(corpus,tolower) 
+  corpus = tm_map(corpus,PlainTextDocument)
+  corpus = tm_map(corpus,removePunctuation) 
+  corpus = tm_map(corpus,removeWords, stopwords("english"))
+  corpus = tm_map(corpus,stemDocument)
+  corpus
+}
+
+storage = "spam.Rdata.xz"
+if(file.exists(storage)){
+  load(storage)
+}else{
+  corp = pre.corp(data$text)
+  dtm = DocumentTermMatrix(corp)
+  spdtm = as.matrix(removeSparseTerms(dtm,0.95))
+  save(corp,dtm,spdtm,file=storage,compress="xz")
+}
+
+```
+
+problem 2.1:
+```{r}
+dim(as.matrix(dtm))
+```
+
+problem 2.2:
+```{r}
+dim(spdtm)
+```
+
+problem 2.3:
+```{r}
+freqlist = sort(apply(spdtm,2,sum),decreasing=TRUE)
+freqlist[1]
+```
+
+problem 2.4:
+```{r}
+library(data.table)
+DT = data.table(spdtm)
+oldnames = colnames(DT)
+newnames = make.names(oldnames)
+setnames(DT,oldnames,newnames)
+DT$spam = data$spam
+setkey(DT,"spam")
+
+
+wordcount = DT[,lapply(.SD,sum),by=spam]
+wc = t(wordcount)[-1,]
+hamc = data.table(word=rownames(wc),freq=wc[,1])
+spamc = data.table(word=rownames(wc),freq=wc[,2])
+rm(wc)
+rm(wordcount)
+setkey(spamc,freq)
+setkey(hamc,freq)
+hamc[freq>=5000]
+spamc[freq>=1000]
+```
+
+## Building Machine Learning Models
+```{r}
+DT$spam = as.factor(DT$spam)
+library(caTools)
+set.seed(123)
+spl = sample.split(DT$spam,SplitRatio=.7)
+train = DT[spl]
+test = DT[!spl]
+
+m1 = glm(spam~.,data=train,family="binomial")
+library(rpart)
+library(rpart.plot)
+library(ROCR)
+m2 = rpart(spam~.,data=train,method="class")
+library(randomForest)
+set.seed(123)
+m3 = randomForest(spam~.,data=train)
+
+accuracy = function(actual,predicted,cutoff){
+  conf = table(actual,predicted>cutoff)
+  sum(diag(conf))/nrow(actual)
+}
+
+actual = train$spam
+N = length(actual)
+
+m1.pred = predict(m1)
+m1.conf = table(actual,m1.pred>.5)
+m1.acc = sum(diag(m1.conf))/N
+m1.auc = as.numeric(performance(prediction(m1.pred,actual),"auc")@y.values)
+
+sum(m1.pred<0.00001)
+sum(m1.pred>0.99999)
+sum(m1.pred>=0.00001 & m1.pred<0.99999)
+
+m1.coef = summary(m1)$coefficients
+sum(m1.coef[,4]<.05)
+
+m1.acc
+m1.auc
+
+
+m2.pred = predict(m2,type="prob")[,2]
+m2.conf = table(actual,m2.pred>.5)
+m2.acc = sum(diag(m2.conf))/N
+prp(m2)
+m2.auc = as.numeric(performance(prediction(m2.pred,actual),"auc")@y.values)
+
+m2.acc
+m2.auc
+
+
+m3.pred = predict(m3,type="prob")[,2]
+m3.conf = table(actual,m3.pred>.5)
+m3.acc = sum(diag(m3.conf))/N
+m3.auc = as.numeric(performance(prediction(m3.pred,actual),"auc")@y.values)
+
+m3.acc
+m3.auc
+
+```
+
+
+```{r}
+actual = test$spam
+N = length(actual)
+
+m1.pred = predict(m1,newdata=test)
+m1.conf = table(actual,m1.pred>.5)
+m1.acc = sum(diag(m1.conf))/N
+m1.auc = as.numeric(performance(prediction(m1.pred,actual),"auc")@y.values)
+
+m1.acc
+m1.auc
+
+m2.pred = predict(m2,newdata=test,type="prob")[,2]
+m2.conf = table(actual,m2.pred>.5)
+m2.acc = sum(diag(m2.conf))/N
+m2.auc = as.numeric(performance(prediction(m2.pred,actual),"auc")@y.values)
+
+m2.acc
+m2.auc
+
+
+m3.pred = predict(m3,newdata=test,type="prob")[,2]
+m3.conf = table(actual,m3.pred>.5)
+m3.acc = sum(diag(m3.conf))/N
+m3.auc = as.numeric(performance(prediction(m3.pred,actual),"auc")@y.values)
+
+m3.acc
+m3.auc
+
+```
+
+
